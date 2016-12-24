@@ -1,7 +1,10 @@
+import numpy as np
 import seaborn as sns
 from matplotlib import cm
 from matplotlib import colors
 from matplotlib import pyplot as plt
+
+import utils
 
 
 FONTSIZE_LABEL = 12
@@ -10,9 +13,10 @@ KDE_NOTICE = ("Do note that weights cannot really get negative values, "
               "it's just the prolonged estimates of the distributions.")
 
 
-def visualize_gift_type_counts(df):
+def visualize_gift_type_counts():
     # Get unique gift types and their counts
-    gift_types = df['GiftId'].apply(lambda x: x.split('_')[0]).value_counts()
+    gift_types = utils.GIFTS_DF['GiftId'].apply(
+        lambda x: x.split('_')[0]).value_counts()
     # Capitalize gift types
     gift_types.index = [gift.title() for gift in gift_types.index]
     # Generate colors for bars
@@ -88,3 +92,15 @@ def visualize_gift_type_weight_box_plots(df, n_observations_per_gift):
                  n_observations_per_gift)
     plt.tight_layout()
     plt.savefig('gift_type_weight_box_plots.png')
+
+
+if __name__ == '__main__':
+    seed = 1122345
+    np.random.seed(seed)
+    n_observations_per_gift = 1000
+    simulated_weights = utils.simulate_gift_weights(n_observations_per_gift)
+    visualize_gift_type_counts()
+    visualize_gift_type_weight_distributions(
+        df=simulated_weights, n_observations_per_gift=n_observations_per_gift)
+    visualize_gift_type_weight_box_plots(
+        df=simulated_weights, n_observations_per_gift=n_observations_per_gift)
