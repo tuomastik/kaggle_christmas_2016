@@ -76,3 +76,7 @@ def set_expected_gift_weights(approach, n_observations_per_gift=None):
             'Gloves': 0.5 * 0.7 + 0.3 * 3.5}  # = 1.4
     else:
         raise(Exception("Unknown 'approach' parameter value: %s" % approach))
+
+
+def round_down_to_even(f):
+    return int(np.floor(f / 2.) * 2)
