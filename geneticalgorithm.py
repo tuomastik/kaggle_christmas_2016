@@ -19,49 +19,73 @@ class GeneticAlgorithm:
                                      range(population_size)])
         self.best_individual = None
 
-    def train(self, n_generations=10, for_reproduction=0.1):
-        for _ in range(n_generations):
-            fittest = self.get_fittest_individuals(for_reproduction)
+    def train(self, n_generations=1000, for_reproduction=0.1,
+              mutation_rate=0.01):
+        # Round the number of parents to be selected to an even number so that
+        # we can execute bio-inspired operators in a pair wise manner.
+        n_parents = utils.round_down_to_even(for_reproduction *
+                                             len(self.individuals))
+        children_per_parent = int(1.0 / for_reproduction)
+        for generation in range(1, n_generations + 1):
+            # fittest = self.parent_selection_roulette_wheel(n_parents)
+            fittest = self.parent_selection_truncation(n_parents)
 
             print("")
-            print("Rewards of the fittest")
-            print("----------------------")
+            print("Rewards of the new parents")
+            print("--------------------------")
             for f in fittest:
                 print("%.3f" % f.reward)
 
             self.individuals = self.breed_mutation(
-                parents=fittest, children_per_parent=int(1.0/for_reproduction))
+                parents=fittest, children_per_parent=children_per_parent,
+                mutation_rate=mutation_rate)
             self.calculate_rewards()
-            self.save_best_individual_on_hard_drive()
+            self.find_best_individual()
+            if generation % 10 == 0:
+                # Every 10th generation
+                self.save_best_individual_on_hard_drive()
 
-    def get_fittest_individuals(self, for_reproduction):
+    def parent_selection_roulette_wheel(self, n_parents):
+        rewards = np.array([i.reward for i in self.individuals])
+        total_reward = rewards.sum()
+        relative_rewards = rewards / float(total_reward)
+        probability_intervals = relative_rewards.cumsum()
+        parents = []
+        for _ in range(n_parents):
+            random_probability = np.random.uniform(low=0, high=1, size=1)[0]
+            for i, p in zip(self.individuals, probability_intervals):
+                if random_probability <= p:
+                    parents.append(i)
+                    break
+        return parents
+
+    def parent_selection_truncation(self, n_parents):
         rewards = [i.reward for i in self.individuals]
-        # Save the best one if better than current best
-        if (self.best_individual is None or
-                self.best_individual.reward < np.max(rewards)):
-            self.best_individual = self.individuals[np.argmax(rewards)]
-        # Round the number of fittest individuals to be selected to
-        # an even number so that we can execute bio-inspired operators
-        # in a pair wise manner.
-        n_best = utils.round_down_to_even(for_reproduction * len(rewards))
         # Find indices of n_best solution rewards
-        best_ix = np.argpartition(rewards, -n_best)[-n_best:]
+        best_ix = np.argpartition(rewards, -n_parents)[-n_parents:]
         fittest_solutions = self.individuals[best_ix]
         return fittest_solutions
 
     @staticmethod
-    def breed_mutation(parents, children_per_parent):
+    def breed_mutation(parents, children_per_parent, mutation_rate):
         mutation_children = []
         for parent in parents:
                 for _ in range(children_per_parent):
                     new_child = copy.deepcopy(parent)
-                    new_child.mutate()
+                    new_child.mutate(mutation_rate)
                     mutation_children.append(new_child)
         return np.array(mutation_children)
 
     def calculate_rewards(self):
         for solution in self.individuals:
             solution.calculate_reward()
+
+    def find_best_individual(self):
+        rewards = [i.reward for i in self.individuals]
+        # Save the best one if better than current best
+        if (self.best_individual is None or
+                self.best_individual.reward < np.max(rewards)):
+            self.best_individual = self.individuals[np.argmax(rewards)]
 
     def save_best_individual_on_hard_drive(self):
         # Create output folder if it does not exist yet
@@ -105,42 +129,48 @@ class SolutionCandidate:
     def calculate_reward(self):
         self.reward = 0
         for bag in self.bags:
-            if bag.weight <= utils.MAX_BAG_WEIGHT:
+            if len(bag.gifts) >= 3 and bag.weight <= utils.MAX_BAG_WEIGHT:
                 self.reward += bag.weight
             # else:
-            #     print("  - Too heavy bag!")
+            #     print("  - Discarding bag because there are too few gifts "
+            #           "in the bag or the bag is too heavy!")
 
     def mutate(self, mutation_rate=0.001):
-        # Expecting that all gifts are in bags
-        n_gifts_mutate = int(np.floor(mutation_rate * utils.N_GIFTS))
-        # Determine randomly which gifts to mutate
-        gift_ix_mutate = np.random.permutation(utils.N_GIFTS)[:n_gifts_mutate]
-        # First, delete those gifts from bags
-        old_bag_ix, deleted_gifts = self.delete_gifts(gift_ix=gift_ix_mutate)
-        # Determine randomly in which different bag to add the gifts
-        new_bag_ix = [i for i in np.random.randint(
-            low=0, high=utils.N_BAGS, size=n_gifts_mutate + len(old_bag_ix))
-                      if i not in old_bag_ix][:n_gifts_mutate]
-        self.add_gifts(gifts=deleted_gifts, bag_indices=new_bag_ix)
+        if isinstance(mutation_rate, float) and 0 <= mutation_rate <= 1:
+            # Expecting that all gifts are in bags
+            n_gifts_mutate = int(np.floor(mutation_rate * utils.N_GIFTS))
+        else:
+            n_gifts_mutate = int(mutation_rate)
+        # Select the bags between which gifts are to be mutated (moved)
+        bag_ix_from, bag_ix_to = self.get_mutation_bag_ix(n_gifts_mutate)
+        # Move gifts between bags
+        for bag_from, bag_to in zip(bag_ix_from, bag_ix_to):
+            gift = np.random.choice(self.bags[bag_from].gifts, size=1)[0]
+            self.bags[bag_to].add_existing_gift(gift)
+            self.bags[bag_from].remove_gift(gift)
 
-    def delete_gifts(self, gift_ix):
-        # Store the indices of bags where the gifts are found.
-        # Store the gifts that are deleted.
-        bag_ix, deleted_gifts = [], []
-        for i, bag in enumerate(self.bags):
-            gifts_to_remove = []
-            for gift in bag.gifts:
-                if gift.running_nr in gift_ix:
-                    bag_ix.append(i)
-                    deleted_gifts.append(gift)
-                    gifts_to_remove.append(gift)
-            for gift_to_remove in gifts_to_remove:
-                bag.remove_gift(gift_to_remove)
-        return bag_ix, deleted_gifts
-
-    def add_gifts(self, gifts, bag_indices):
-        for bag_ix, gift in zip(bag_indices, gifts):
-            self.bags[bag_ix].gifts.append(gift)
+    def get_mutation_bag_ix(self, n_gifts_mutate):
+        # Appreciate heavier bags more when deciding the bags from which
+        # gifts will be moved away
+        bag_weights = np.array([b.weight for b in self.bags])
+        bag_weights_probas = bag_weights / bag_weights.sum()
+        bag_ix_from = np.random.choice(
+            range(utils.N_BAGS), size=n_gifts_mutate, replace=False,
+            p=bag_weights_probas)
+        # Appreciate lighter bags more when deciding the bags in which
+        # gifts will be moved to
+        bag_ix_available, bag_weights_available = [], []
+        for i in range(utils.N_BAGS):
+            if i not in bag_ix_from:
+                bag_ix_available.append(i)
+                bag_weights_available.append(1./bag_weights[i])
+        bag_weights_available = np.array(bag_weights_available)
+        bag_weights_available_probas = (bag_weights_available /
+                                        bag_weights_available.sum())
+        bag_ix_to = np.random.choice(
+            bag_ix_available, size=n_gifts_mutate, replace=False,
+            p=bag_weights_available_probas)
+        return bag_ix_from, bag_ix_to
 
 
 class Bag:
