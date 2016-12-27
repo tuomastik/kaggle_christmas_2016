@@ -14,8 +14,8 @@ GIFTS_PER_BAG_INITIALLY = np.diff(np.linspace(
 class SelectionMethod:
     def __init__(self):
         pass
-    truncation = 1
-    roulette_wheel = 2
+    truncation = 'truncation'
+    roulette_wheel = 'roulette_wheel'
 
 
 class GiftWeightInitMethod:
@@ -33,6 +33,8 @@ class GeneticAlgorithm:
     def __init__(self, population_size=50,
                  gift_weight_init_method=GiftWeightInitMethod.expected_mean):
         self.calculate_expected_weights_if_needed(gift_weight_init_method)
+        print("Initializing population (%s solution candidates)..." % (
+            population_size))
         self.individuals = np.array([SolutionCandidate(gift_weight_init_method)
                                      for _ in range(population_size)])
         self.best_individual = None
@@ -40,11 +42,26 @@ class GeneticAlgorithm:
     def train(self, n_generations=1000, for_reproduction=0.1,
               mutation_rate=0.01, selection_method=SelectionMethod.truncation,
               n_generations_weight_resample=None):
+        print("\nStarting training...")
+        # Pre calculate things.
         # Round the number of parents to be selected to an even number so that
         # we can execute bio-inspired operators in a pair wise manner.
         n_parents = utils.round_down_to_even(for_reproduction *
                                              len(self.individuals))
         children_per_parent = int(1.0 / for_reproduction)
+
+        # Print settings
+        print("\nSettings\n--------")
+        print("Nr of parents: %s" % n_parents)
+        print("Nr of children per parent: %s" % children_per_parent)
+        print("Nr of generations: %s" % n_generations)
+        print("Mutation rate: %s" % mutation_rate)
+        print("Selection method: %s" % selection_method)
+        if n_generations_weight_resample is not None:
+            print("Resample gift weights after %s generations" % (
+                n_generations_weight_resample))
+
+        # Evolution
         for generation in range(1, n_generations + 1):
 
             parents = self.select_parents(selection_method, n_parents)
@@ -54,19 +71,21 @@ class GeneticAlgorithm:
                 print("\nResampling gift weights for the new parents")
                 parents = self.resample_weights(parents)
 
-            print("\nRewards of the new parents")
-            print("--------------------------")
-            for f in parents:
-                print("%.3f" % f.reward)
+            print("\nGeneration %s" % generation)
+            print("Rewards of the new parents\n--------------------------")
+            for p in parents:
+                print("%.3f" % p.reward)
 
             self.individuals = self.breed_mutation(
                 parents=parents, children_per_parent=children_per_parent,
                 mutation_rate=mutation_rate)
             self.calculate_rewards()
+
             self.find_best_individual()
             if generation % 10 == 0:
                 # Every 10th generation
                 self.save_best_individual_on_hard_drive()
+        print("Training complete!")
 
     def parent_selection_roulette_wheel(self, n_parents):
         rewards = np.array([i.reward for i in self.individuals])
@@ -155,15 +174,12 @@ class GeneticAlgorithm:
 
 class SolutionCandidate:
     def __init__(self, gift_weight_init_method):
-        # print("Creating solution...")
         self.bags = self.initialize_bags(gift_weight_init_method)
         self.reward = 0.0
         self.calculate_reward()
-        # print("  - Reward: %s" % self.reward)
 
     @staticmethod
     def initialize_bags(gift_weight_init_method):
-        # print("Initializing bags...")
         bags = []
         random_row_indices = np.random.permutation(utils.N_GIFTS)
         for n_gifts in GIFTS_PER_BAG_INITIALLY:
@@ -183,10 +199,10 @@ class SolutionCandidate:
                         gift['gift_type'].lower()]()
                 else:
                     raise(Exception("Unknown gift_weight_init_method"))
-                bag.add_new_gift(
+                bag.add_gift(gift=Gift(
                     weight=gift_weight,
                     id_label=gift['GiftId'],
-                    running_number=row_ix)
+                    running_nr=row_ix))
             bags.append(bag)
         return bags
 
@@ -210,7 +226,7 @@ class SolutionCandidate:
         # Move gifts between bags
         for bag_from, bag_to in zip(bag_ix_from, bag_ix_to):
             gift = np.random.choice(self.bags[bag_from].gifts, size=1)[0]
-            self.bags[bag_to].add_existing_gift(gift)
+            self.bags[bag_to].add_gift(gift)
             self.bags[bag_from].remove_gift(gift)
 
     def get_mutation_bag_ix(self, n_gifts_mutate):
@@ -242,11 +258,7 @@ class Bag:
         self.gifts = []
         self.weight = 0.0
 
-    def add_new_gift(self, weight, id_label, running_number):
-        self.gifts.append(Gift(weight, id_label, running_number))
-        self.weight += weight
-
-    def add_existing_gift(self, gift):
+    def add_gift(self, gift):
         self.gifts.append(gift)
         self.weight += gift.weight
 
