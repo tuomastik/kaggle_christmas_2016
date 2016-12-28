@@ -9,7 +9,7 @@ import utils
 SAVED_SOLUTIONS_FOLDER = 'ga_solutions'
 GIFTS_PER_BAG_INITIALLY = np.diff(np.linspace(
     start=0, stop=utils.N_GIFTS, num=utils.N_BAGS + 1, dtype=int))
-SIMULATED_GIFTS = utils.simulate_gift_weights(n_observations_per_gift=1000)
+SIMULATED_GIFTS = utils.simulate_gift_weights(n_observations_per_gift=10000)
 
 
 class SelectionMethod:
@@ -39,16 +39,19 @@ class GeneticAlgorithm:
 
     def __init__(self, population_size=50,
                  gift_weight_init_method=GiftWeightInitMethod.expected_mean,
-                 solution_init_method=SolutionInitMethod.uneven_constrained):
+                 solution_init_method=SolutionInitMethod.uneven_constrained,
+                 gift_types_skip=None):
         self.results_folder_name = self.save_init_settings_on_hard_drive(
-            population_size, gift_weight_init_method, solution_init_method)
+            population_size, gift_weight_init_method, solution_init_method,
+            gift_types_skip)
         self.calculate_expected_weights_if_needed(gift_weight_init_method)
         self.individuals = []
         for i in range(1, population_size + 1):
             print("\rInitializing population - solution candidate %s / %s" % (
                   i, population_size), end='', flush=True)  # Print same line
-            self.individuals.append(SolutionCandidate(gift_weight_init_method,
-                                                      solution_init_method))
+            self.individuals.append(SolutionCandidate(
+                gift_weight_init_method, solution_init_method,
+                gift_types_skip))
         self.individuals = np.array(self.individuals)
         self.best_individual = None
 
@@ -168,7 +171,8 @@ class GeneticAlgorithm:
 
     @staticmethod
     def save_init_settings_on_hard_drive(
-            population_size, gift_weight_init_method, solution_init_method):
+            population_size, gift_weight_init_method, solution_init_method,
+            gift_types_skip):
         # Create parent folder if needed
         if not os.path.exists(SAVED_SOLUTIONS_FOLDER):
             os.makedirs(SAVED_SOLUTIONS_FOLDER)
@@ -182,6 +186,7 @@ class GeneticAlgorithm:
             "\nInitialization settings\n-----------------------",
             "Population size: %s" % population_size,
             "Gift weight init method: %s" % gift_weight_init_method,
+            "Gift types not to include: %s" % gift_types_skip,
             "Solution init method: %s\n" % solution_init_method]
         # Create settings file, write to file & close the file
         f_out = open(os.path.join(results_folder, 'settings.txt'), 'w')
@@ -216,14 +221,16 @@ class GeneticAlgorithm:
 
 
 class SolutionCandidate:
-    def __init__(self, gift_weight_init_method, solution_init_method):
-        self.bags = self.initialize_bags(gift_weight_init_method,
-                                         solution_init_method)
+    def __init__(self, gift_weight_init_method, solution_init_method,
+                 gift_types_skip):
+        self.bags = self.initialize_bags(
+            gift_weight_init_method, solution_init_method, gift_types_skip)
         self.reward = 0.0
         self.calculate_reward()
 
     @staticmethod
-    def initialize_bags_evenly_not_constrained(gift_weight_init_method):
+    def initialize_bags_evenly_not_constrained(gift_weight_init_method,
+                                               gift_types_skip):
         bags = []
         random_row_indices = np.random.permutation(utils.N_GIFTS)
         for n_gifts in GIFTS_PER_BAG_INITIALLY:
@@ -233,8 +240,10 @@ class SolutionCandidate:
             for row_ix, gift in extracted_gifts.iterrows():
                 gift = Gift(id_label=gift['GiftId'],
                             gift_type=gift['GiftId'].split('_')[0].title())
-                gift.initialize_weight(gift_weight_init_method)
-                bag.add_gift(gift=gift)
+                if gift.gift_type.lower() not in [g.lower() for g in
+                                                  gift_types_skip]:
+                    gift.initialize_weight(gift_weight_init_method)
+                    bag.add_gift(gift=gift)
             bag.calculate_weight()
             bags.append(bag)
         # Add one trash bag for gifts not included in the solution reward
@@ -242,7 +251,8 @@ class SolutionCandidate:
         return bags
 
     @staticmethod
-    def initialize_bags_unevenly_constrained(gift_weight_init_method):
+    def initialize_bags_unevenly_constrained(gift_weight_init_method,
+                                             gift_types_skip):
         bags, gifts = [], []
         # Initialize bags
         for _ in range(utils.N_BAGS):
@@ -251,8 +261,10 @@ class SolutionCandidate:
         for _, row in utils.GIFTS_DF.iterrows():
             gift = Gift(id_label=row['GiftId'],
                         gift_type=row['GiftId'].split('_')[0].title())
-            gift.initialize_weight(gift_weight_init_method)
-            gifts.append(gift)
+            if gift.gift_type.lower() not in [g.lower() for g in
+                                              gift_types_skip]:
+                gift.initialize_weight(gift_weight_init_method)
+                gifts.append(gift)
         # Randomize the order of gifts
         np.random.shuffle(gifts)
         # Put gifts in the bags
@@ -290,13 +302,14 @@ class SolutionCandidate:
         return bags
 
     @staticmethod
-    def initialize_bags(gift_weight_init_method, solution_init_method):
+    def initialize_bags(gift_weight_init_method, solution_init_method,
+                        gift_types_skip):
         if solution_init_method == SolutionInitMethod.even_not_constrained:
             return SolutionCandidate.initialize_bags_evenly_not_constrained(
-                gift_weight_init_method)
+                gift_weight_init_method, gift_types_skip)
         elif solution_init_method == SolutionInitMethod.uneven_constrained:
             return SolutionCandidate.initialize_bags_unevenly_constrained(
-                gift_weight_init_method)
+                gift_weight_init_method, gift_types_skip)
         else:
             raise(Exception("Unknown solution_init_method"))
 
