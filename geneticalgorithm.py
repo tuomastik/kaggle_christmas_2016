@@ -11,6 +11,9 @@ GIFTS_PER_BAG_INITIALLY = np.diff(np.linspace(
     start=0, stop=utils.N_GIFTS, num=utils.N_BAGS + 1, dtype=int))
 
 
+SIMULATED_GIFTS = utils.simulate_gift_weights(n_observations_per_gift=1000)
+
+
 class SelectionMethod:
     def __init__(self):
         pass
@@ -27,16 +30,31 @@ class GiftWeightInitMethod:
     sample_from_distr = 'sample_from_distribution'
 
 
+class SolutionInitMethod:
+    def __init__(self):
+        pass
+    random = 'random'
+    greedy = 'greedy'
+
+
 class GeneticAlgorithm:
     SAVED_SOLUTIONS_FOLDER = 'ga_solutions'
 
     def __init__(self, population_size=50,
-                 gift_weight_init_method=GiftWeightInitMethod.expected_mean):
+                 gift_weight_init_method=GiftWeightInitMethod.expected_mean,
+                 solution_init_method=SolutionInitMethod.greedy):
+        print("\nSettings\n--------")
+        print("Population size: %s" % population_size)
+        print("Gift weight init method: %s" % gift_weight_init_method)
+        print("Solution init method: %s\n" % solution_init_method)
         self.calculate_expected_weights_if_needed(gift_weight_init_method)
-        print("Initializing population (%s solution candidates)..." % (
-            population_size))
-        self.individuals = np.array([SolutionCandidate(gift_weight_init_method)
-                                     for _ in range(population_size)])
+        self.individuals = []
+        for i in range(1, population_size + 1):
+            print("\rInitializing population - solution candidate %s / %s" % (
+                  i, population_size), end='', flush=True)  # Print same line
+            self.individuals.append(SolutionCandidate(gift_weight_init_method,
+                                                      solution_init_method))
+        self.individuals = np.array(self.individuals)
         self.best_individual = None
 
     def train(self, n_generations=1000, for_reproduction=0.1,
@@ -57,9 +75,11 @@ class GeneticAlgorithm:
         print("Nr of generations: %s" % n_generations)
         print("Mutation rate: %s" % mutation_rate)
         print("Selection method: %s" % selection_method)
-        if n_generations_weight_resample is not None:
-            print("Resample gift weights after %s generations" % (
-                n_generations_weight_resample))
+        print("Resample gift weights after generations: %s" % (
+            n_generations_weight_resample))
+        print("Nr of bags: %s" % utils.N_BAGS)
+        print("Max weight of a bag: %s" % utils.MAX_BAG_WEIGHT)
+        print("Minimum nr of gifts in a bag: %s" % utils.MIN_GIFTS_IN_BAG)
 
         # Evolution
         for generation in range(1, n_generations + 1):
@@ -166,57 +186,99 @@ class GeneticAlgorithm:
                 for k, gift in enumerate(bag.gifts):
                     individuals[i].bags[j].gifts[k].weight = (
                         utils.GIFT_WEIGHT_DISTRIBUTIONS[
-                            gift.id_label.split('_')[0]]())
+                            gift.gift_type.lower()]())
                 individuals[i].bags[j].calculate_weight()
             individuals[i].calculate_reward()
         return individuals
 
 
 class SolutionCandidate:
-    def __init__(self, gift_weight_init_method):
-        self.bags = self.initialize_bags(gift_weight_init_method)
+    def __init__(self, gift_weight_init_method, solution_init_method):
+        self.bags = self.initialize_bags(gift_weight_init_method,
+                                         solution_init_method)
         self.reward = 0.0
         self.calculate_reward()
 
     @staticmethod
-    def initialize_bags(gift_weight_init_method):
+    def initialize_bags_random(gift_weight_init_method):
         bags = []
         random_row_indices = np.random.permutation(utils.N_GIFTS)
         for n_gifts in GIFTS_PER_BAG_INITIALLY:
-            bag = Bag()
+            bag = Bag(is_trash_bag=False)
             extracted_gifts = utils.GIFTS_DF.iloc[random_row_indices[:n_gifts]]
             random_row_indices = random_row_indices[n_gifts:]
             for row_ix, gift in extracted_gifts.iterrows():
-                if gift_weight_init_method in [
-                        GiftWeightInitMethod.expected_mean,
-                        GiftWeightInitMethod.expected_median,
-                        GiftWeightInitMethod.expected_analytical]:
-                    gift_weight = utils.EXPECTED_GIFT_WEIGHTS[
-                        gift['gift_type']]
-                elif (gift_weight_init_method ==
-                      GiftWeightInitMethod.sample_from_distr):
-                    gift_weight = utils.GIFT_WEIGHT_DISTRIBUTIONS[
-                        gift['gift_type'].lower()]()
-                else:
-                    raise(Exception("Unknown gift_weight_init_method"))
-                bag.add_gift(gift=Gift(
-                    weight=gift_weight,
-                    id_label=gift['GiftId'],
-                    running_nr=row_ix))
+                gift = Gift(id_label=gift['GiftId'],
+                            gift_type=gift['GiftId'].split('_')[0].title())
+                gift.initialize_weight(gift_weight_init_method)
+                bag.add_gift(gift=gift)
+            bag.calculate_weight()
             bags.append(bag)
+        # Add one trash bag for gifts not included in the solution reward
+        bags.append(Bag(is_trash_bag=True))
         return bags
+
+    @staticmethod
+    def initialize_bags_greedy(gift_weight_init_method):
+        bags, gifts = [], []
+        # Initialize gifts
+        for _, row in utils.GIFTS_DF.iterrows():
+            gift = Gift(id_label=row['GiftId'],
+                        gift_type=row['GiftId'].split('_')[0].title())
+            gift.initialize_weight(gift_weight_init_method)
+            gifts.append(gift)
+        # Sort gifts based on weight (first gift will be the heaviest)
+        gifts.sort(key=lambda x: x.weight, reverse=True)
+        # Put gifts in the bags
+        for gifts_per_bag in GIFTS_PER_BAG_INITIALLY:
+            bag = Bag(is_trash_bag=False)
+            added_gifts = []
+            for gift in gifts:
+                if (len(bag.gifts) < gifts_per_bag and
+                        bag.weight + gift.weight < utils.MAX_BAG_WEIGHT):
+                    bag.add_gift(gift)
+                    added_gifts.append(gift)
+            bags.append(bag)
+            # Remove added gifts from list of gifts
+            gifts = [g for g in gifts if g not in added_gifts]
+        if len(gifts) > 0:
+            # Add the remaining gifts to random bags
+            # print("Randomly assigning a bag for each %s leftover gift" %
+            #       len(gifts))
+            for bag_ix, gift in zip(
+                    np.random.randint(low=0, high=utils.N_BAGS, size=len(gifts)),
+                    gifts):
+                bags[bag_ix].add_gift(gift)
+        # Calculate weights for all the bags
+        for bag in bags:
+            bag.calculate_weight()
+        # Add one trash bag for gifts not included in the solution reward
+        bags.append(Bag(is_trash_bag=True))
+        return bags
+
+    @staticmethod
+    def initialize_bags(gift_weight_init_method, solution_init_method):
+        if solution_init_method == SolutionInitMethod.random:
+            return SolutionCandidate.initialize_bags_random(
+                gift_weight_init_method)
+        elif solution_init_method == SolutionInitMethod.greedy:
+            return SolutionCandidate.initialize_bags_greedy(
+                gift_weight_init_method)
+        else:
+            raise(Exception("Unknown solution_init_method"))
 
     def calculate_reward(self):
         self.reward = 0.0
         for bag in self.bags:
-            if len(bag.gifts) >= 3 and bag.weight <= utils.MAX_BAG_WEIGHT:
-                self.reward += bag.weight
+            if (not bag.is_trash_bag and len(bag.gifts) >= 3 and
+                    bag.expected_weight <= utils.MAX_BAG_WEIGHT):
+                self.reward += bag.expected_weight
             # else:
             #     print("  - Discarding bag because there are too few gifts "
             #           "in the bag or the bag is too heavy!")
 
     def mutate(self, mutation_rate=0.001):
-        if isinstance(mutation_rate, float) and 0 <= mutation_rate <= 1:
+        if isinstance(mutation_rate, float) and 0. < mutation_rate < 1.:
             # Expecting that all gifts are in bags
             n_gifts_mutate = int(np.floor(mutation_rate * utils.N_GIFTS))
         else:
@@ -227,36 +289,29 @@ class SolutionCandidate:
         for bag_from, bag_to in zip(bag_ix_from, bag_ix_to):
             gift = np.random.choice(self.bags[bag_from].gifts, size=1)[0]
             self.bags[bag_to].add_gift(gift)
+            self.bags[bag_to].calculate_weight()
             self.bags[bag_from].remove_gift(gift)
+            self.bags[bag_from].calculate_weight()
 
     def get_mutation_bag_ix(self, n_gifts_mutate):
-        # Appreciate heavier bags more when deciding the bags from which
-        # gifts will be moved away
-        bag_weights = np.array([b.weight for b in self.bags])
-        bag_weights_probas = bag_weights / bag_weights.sum()
         bag_ix_from = np.random.choice(
-            range(utils.N_BAGS), size=n_gifts_mutate, replace=False,
-            p=bag_weights_probas)
-        # Appreciate lighter bags more when deciding the bags in which
-        # gifts will be moved to
-        bag_ix_available, bag_weights_available = [], []
-        for i in range(utils.N_BAGS):
-            if i not in bag_ix_from:
-                bag_ix_available.append(i)
-                bag_weights_available.append(1./bag_weights[i])
-        bag_weights_available = np.array(bag_weights_available)
-        bag_weights_available_probas = (bag_weights_available /
-                                        bag_weights_available.sum())
-        bag_ix_to = np.random.choice(
-            bag_ix_available, size=n_gifts_mutate, replace=False,
-            p=bag_weights_available_probas)
-        return bag_ix_from, bag_ix_to
+            # There must be gift(s) in a bag
+            [i for i, bag in enumerate(self.bags) if len(bag.gifts) > 1],
+            size=n_gifts_mutate, replace=False)
+        bag_ix_to = []
+        for bag_ix in bag_ix_from:
+            bag_ix_to.append(np.random.choice(
+                # Let's not add gifts to bags where they were taken from
+                [i for i in range(utils.N_BAGS) if i != bag_ix], size=1)[0])
+        return bag_ix_from, np.array(bag_ix_to)
 
 
 class Bag:
-    def __init__(self):
+    def __init__(self, is_trash_bag=False):
         self.gifts = []
         self.weight = 0.0
+        self.expected_weight = 0.0
+        self.is_trash_bag = is_trash_bag
 
     def add_gift(self, gift):
         self.gifts.append(gift)
@@ -267,13 +322,27 @@ class Bag:
         self.weight -= gift.weight
 
     def calculate_weight(self):
-        self.weight = 0.0
-        for gift in self.gifts:
-            self.weight += gift.weight
+        self.weight = np.array([gift.weight for gift in self.gifts]).sum()
+        self.expected_weight = np.array(
+            [SIMULATED_GIFTS[g.gift_type] for g in self.gifts]).sum(
+            axis=0).mean()
+        # print("Expected weight: %s" % self.expected_weight)
 
 
 class Gift:
-    def __init__(self, weight, id_label, running_nr):
+    def __init__(self, weight=None, id_label=None, gift_type=None):
         self.weight = weight
         self.id_label = id_label
-        self.running_nr = running_nr
+        self.gift_type = gift_type
+
+    def initialize_weight(self, gift_weight_init_method):
+        if gift_weight_init_method in [
+                GiftWeightInitMethod.expected_mean,
+                GiftWeightInitMethod.expected_median,
+                GiftWeightInitMethod.expected_analytical]:
+            self.weight = utils.EXPECTED_GIFT_WEIGHTS[self.gift_type]
+        elif gift_weight_init_method == GiftWeightInitMethod.sample_from_distr:
+            self.weight = utils.GIFT_WEIGHT_DISTRIBUTIONS[
+                self.gift_type.lower()]()
+        else:
+            raise (Exception("Unknown gift_weight_init_method"))
