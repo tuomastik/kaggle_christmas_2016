@@ -6,9 +6,8 @@ import numpy as np
 
 import utils
 
+
 SAVED_SOLUTIONS_FOLDER = 'ga_solutions'
-GIFTS_PER_BAG_INITIALLY = np.diff(np.linspace(
-    start=0, stop=utils.N_GIFTS, num=utils.N_BAGS + 1, dtype=int))
 SIMULATED_GIFTS = utils.simulate_gift_weights(n_observations_per_gift=10000)
 
 
@@ -28,36 +27,25 @@ class GiftWeightInitMethod:
     sample_from_distr = 'sample_from_distribution'
 
 
-class SolutionInitMethod:
-    def __init__(self):
-        pass
-    even_not_constrained = 'gifts_randomly_evenly_distributed_not_constrained'
-    uneven_constrained = 'gifts_randomly_unevenly_distributed_constrained'
-
-
 class GeneticAlgorithm:
 
     def __init__(self, population_size=50,
                  gift_weight_init_method=GiftWeightInitMethod.expected_mean,
-                 solution_init_method=SolutionInitMethod.uneven_constrained,
-                 gift_types_skip=None):
+                 gift_type_amounts=None):
         self.results_folder_name = self.save_init_settings_on_hard_drive(
-            population_size, gift_weight_init_method, solution_init_method,
-            gift_types_skip)
+            population_size, gift_weight_init_method, gift_type_amounts)
         self.calculate_expected_weights_if_needed(gift_weight_init_method)
         self.individuals = []
         for i in range(1, population_size + 1):
             print("\rInitializing population - solution candidate %s / %s" % (
                   i, population_size), end='', flush=True)  # Print same line
             self.individuals.append(SolutionCandidate(
-                gift_weight_init_method, solution_init_method,
-                gift_types_skip))
+                gift_weight_init_method, gift_type_amounts))
         self.individuals = np.array(self.individuals)
         self.best_individual = None
 
     def train(self, n_generations=1000, for_reproduction=0.1,
-              mutation_rate=0.01, selection_method=SelectionMethod.truncation,
-              n_generations_weight_resample=None):
+              mutation_rate=0.01, selection_method=SelectionMethod.truncation):
         print("\nStarting training...")
 
         # Pre calculate things.
@@ -65,27 +53,26 @@ class GeneticAlgorithm:
         # we can execute bio-inspired operators in a pair wise manner.
         n_parents = utils.round_down_to_even(for_reproduction *
                                              len(self.individuals))
+        if n_parents == 0:
+            raise(Exception("Zero number of parents. Check parameters "
+                            "population_size and for_reproduction."))
         children_per_parent = int(1.0 / for_reproduction)
 
         # Save settings
         self.save_train_settings_on_hard_drive(
             n_parents, children_per_parent, n_generations, mutation_rate,
-            selection_method, n_generations_weight_resample)
+            selection_method)
 
         # Evolution
         for generation in range(1, n_generations + 1):
 
             parents = self.select_parents(selection_method, n_parents)
 
-            if (n_generations_weight_resample is not None and
-                    generation % n_generations_weight_resample == 0):
-                print("\nResampling gift weights for the new parents")
-                parents = self.resample_weights(parents)
-
             print("\nGeneration %s" % generation)
             print("Rewards of the new parents\n--------------------------")
             for p in parents:
-                print("%.3f" % p.reward)
+                print("Reward: %.3f - Std of expected weights of bags: %.3f" %
+                      (p.reward, p.bags_expected_weights_std))
 
             self.individuals = self.breed_mutation(
                 parents=parents, children_per_parent=children_per_parent,
@@ -158,21 +145,8 @@ class GeneticAlgorithm:
                                             approach=gift_weight_init_method)
 
     @staticmethod
-    def resample_weights(individuals):
-        for i, individual in enumerate(individuals):
-            for j, bag in enumerate(individual.bags):
-                for k, gift in enumerate(bag.gifts):
-                    individuals[i].bags[j].gifts[k].weight = (
-                        utils.GIFT_WEIGHT_DISTRIBUTIONS[
-                            gift.gift_type.lower()]())
-                individuals[i].bags[j].calculate_weight()
-            individuals[i].calculate_reward()
-        return individuals
-
-    @staticmethod
     def save_init_settings_on_hard_drive(
-            population_size, gift_weight_init_method, solution_init_method,
-            gift_types_skip):
+            population_size, gift_weight_init_method, gift_type_amounts):
         # Create parent folder if needed
         if not os.path.exists(SAVED_SOLUTIONS_FOLDER):
             os.makedirs(SAVED_SOLUTIONS_FOLDER)
@@ -186,8 +160,7 @@ class GeneticAlgorithm:
             "\nInitialization settings\n-----------------------",
             "Population size: %s" % population_size,
             "Gift weight init method: %s" % gift_weight_init_method,
-            "Gift types not to include: %s" % gift_types_skip,
-            "Solution init method: %s\n" % solution_init_method]
+            "Gift type amounts to include: %s" % gift_type_amounts]
         # Create settings file, write to file & close the file
         f_out = open(os.path.join(results_folder, 'settings.txt'), 'w')
         f_out.write('\n'.join(settings))
@@ -199,7 +172,7 @@ class GeneticAlgorithm:
 
     def save_train_settings_on_hard_drive(
             self, n_parents, children_per_parent, n_generations, mutation_rate,
-            selection_method, n_generations_weight_resample):
+            selection_method):
         settings = [
             "\nTraining settings\n-----------------",
             "Nr of parents: %s" % n_parents,
@@ -207,9 +180,7 @@ class GeneticAlgorithm:
             "Nr of generations: %s" % n_generations,
             "Mutation rate: %s" % mutation_rate,
             "Selection method: %s" % selection_method,
-            "Resample gift weights after generations: %s" %
-            n_generations_weight_resample,
-            "Nr of bags: %s" % utils.N_BAGS,
+            "Nr of bags: %s" % len(self.individuals[0].bags),
             "Max weight of a bag: %s" % utils.MAX_BAG_WEIGHT,
             "Minimum nr of gifts in a bag: %s" % utils.MIN_GIFTS_IN_BAG]
         f = open(os.path.join(self.results_folder_name, 'settings.txt'), "a")
@@ -221,38 +192,16 @@ class GeneticAlgorithm:
 
 
 class SolutionCandidate:
-    def __init__(self, gift_weight_init_method, solution_init_method,
-                 gift_types_skip):
+    def __init__(self, gift_weight_init_method, gift_type_amounts):
         self.bags = self.initialize_bags(
-            gift_weight_init_method, solution_init_method, gift_types_skip)
+            gift_weight_init_method, gift_type_amounts)
         self.reward = 0.0
+        self.bags_expected_weights_std = 0.0
         self.calculate_reward()
 
     @staticmethod
-    def initialize_bags_evenly_not_constrained(gift_weight_init_method,
-                                               gift_types_skip):
-        bags = []
-        random_row_indices = np.random.permutation(utils.N_GIFTS)
-        for n_gifts in GIFTS_PER_BAG_INITIALLY:
-            bag = Bag(is_trash_bag=False)
-            extracted_gifts = utils.GIFTS_DF.iloc[random_row_indices[:n_gifts]]
-            random_row_indices = random_row_indices[n_gifts:]
-            for row_ix, gift in extracted_gifts.iterrows():
-                gift = Gift(id_label=gift['GiftId'],
-                            gift_type=gift['GiftId'].split('_')[0].title())
-                if gift.gift_type.lower() not in [g.lower() for g in
-                                                  gift_types_skip]:
-                    gift.initialize_weight(gift_weight_init_method)
-                    bag.add_gift(gift=gift)
-            bag.calculate_weight()
-            bags.append(bag)
-        # Add one trash bag for gifts not included in the solution reward
-        bags.append(Bag(is_trash_bag=True))
-        return bags
-
-    @staticmethod
-    def initialize_bags_unevenly_constrained(gift_weight_init_method,
-                                             gift_types_skip):
+    def initialize_bags(gift_weight_init_method, gift_type_amounts):
+        gift_type_amounts_remaining = copy.deepcopy(gift_type_amounts)
         bags, gifts = [], []
         # Initialize bags
         for _ in range(utils.N_BAGS):
@@ -261,8 +210,11 @@ class SolutionCandidate:
         for _, row in utils.GIFTS_DF.iterrows():
             gift = Gift(id_label=row['GiftId'],
                         gift_type=row['GiftId'].split('_')[0].title())
-            if gift.gift_type.lower() not in [g.lower() for g in
-                                              gift_types_skip]:
+            if gift_type_amounts_remaining is not None:
+                gift_type_amounts_remaining[gift.gift_type] -= 1
+            if (gift_type_amounts_remaining is None or
+                    gift_type_amounts_remaining[gift.gift_type] >= 0):
+                # Add gift only if its type hasn't been added enough already
                 gift.initialize_weight(gift_weight_init_method)
                 gifts.append(gift)
         # Randomize the order of gifts
@@ -271,10 +223,11 @@ class SolutionCandidate:
         all_bags_full = False
         while not all_bags_full:
             n_bags_filled = 0
+            # For each bag, add the first occurring gift that fits in the bag
             for bag in bags:
                 gift_to_add = None
                 for gift in gifts:
-                    if bag.weight + gift.weight < utils.MAX_BAG_WEIGHT:
+                    if bag.weight + gift.weight <= utils.MAX_BAG_WEIGHT:
                         gift_to_add = gift
                         bag.add_gift(gift_to_add)
                         break
@@ -285,12 +238,6 @@ class SolutionCandidate:
             if n_bags_filled == 0:
                 all_bags_full = True
         if len(gifts) > 0:
-            # Add the remaining gifts to random bags
-            # print("Randomly assigning a bag for each %s leftover gift" %
-            #       len(gifts))
-            # for bag_ix, gift in zip(np.random.randint(
-            #         low=0, high=utils.N_BAGS, size=len(gifts)), gifts):
-            #     bags[bag_ix].add_gift(gift)
             # Add the remaining gifts to a trash bag
             trash_bag = Bag(is_trash_bag=True)
             for gift in gifts:
@@ -301,27 +248,17 @@ class SolutionCandidate:
             bag.calculate_weight()
         return bags
 
-    @staticmethod
-    def initialize_bags(gift_weight_init_method, solution_init_method,
-                        gift_types_skip):
-        if solution_init_method == SolutionInitMethod.even_not_constrained:
-            return SolutionCandidate.initialize_bags_evenly_not_constrained(
-                gift_weight_init_method, gift_types_skip)
-        elif solution_init_method == SolutionInitMethod.uneven_constrained:
-            return SolutionCandidate.initialize_bags_unevenly_constrained(
-                gift_weight_init_method, gift_types_skip)
-        else:
-            raise(Exception("Unknown solution_init_method"))
-
     def calculate_reward(self):
-        self.reward = 0.0
+        rewards = []
         for bag in self.bags:
             if (not bag.is_trash_bag and len(bag.gifts) >= 3 and
                     bag.expected_weight <= utils.MAX_BAG_WEIGHT):
-                self.reward += bag.expected_weight
-            # else:
-            #     print("  - Discarding bag because there are too few gifts "
-            #           "in the bag or the bag is too heavy!")
+                # There must be at least 3 gifts in a bag and the
+                # bag must not bee too heavy.
+                rewards.append(bag.expected_weight)
+        rewards = np.array(rewards)
+        self.bags_expected_weights_std = rewards.std()
+        self.reward = rewards.sum() + 1./rewards.std() * 1000
 
     def mutate(self, mutation_rate=0.001):
         if isinstance(mutation_rate, float) and 0. < mutation_rate < 1.:
