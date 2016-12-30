@@ -100,10 +100,17 @@ class GeneticAlgorithm:
         return parents
 
     def parent_selection_truncation(self, n_parents):
-        rewards = [i.reward for i in self.individuals]
-        # Find indices of solutions with best rewards
-        best_ix = np.argpartition(rewards, -n_parents)[-n_parents:]
-        parents = self.individuals[best_ix]
+        rewards = np.array([i.reward for i in self.individuals])
+        uniques, unique_ix = np.unique(rewards, return_index=True)
+        if len(uniques) >= n_parents:
+            # Select unique best solutions if enough available
+            best_uniques_ix = np.argpartition(uniques, -n_parents)[-n_parents:]
+            best_unique_rewards_ix = unique_ix[best_uniques_ix]
+            parents = self.individuals[best_unique_rewards_ix]
+        else:
+            # Find indices of solutions with best rewards
+            best_ix = np.argpartition(rewards, -n_parents)[-n_parents:]
+            parents = self.individuals[best_ix]
         return parents
 
     def select_parents(self, selection_method, n_parents):
