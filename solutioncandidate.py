@@ -88,22 +88,6 @@ class SolutionCandidate:
         self.mean_reject_rate = (
             bags_rejected.sum(axis=1) / len(bags_rejected.columns)).mean()
 
-    # Old reward calculation
-    # def calculate_reward(self):
-    #     # Calculate expected weights for all the bags
-    #         for bag in bags:
-    #             bag.calculate_weight()
-    #     rewards = []
-    #     for bag in self.bags:
-    #         if (not bag.is_trash_bag and len(bag.gifts) >= 3 and
-    #                 bag.expected_weight <= utils.MAX_BAG_WEIGHT):
-    #             # There must be at least 3 gifts in a bag and the
-    #             # bag must not bee too heavy.
-    #             rewards.append(bag.expected_weight)
-    #     rewards = np.array(rewards)
-    #     self.bags_expected_weights_std = rewards.std()
-    #     self.reward = rewards.sum() + 1./rewards.std() * 1000
-
     def mutate(self, mutation_rate=0.001):
         if isinstance(mutation_rate, float) and 0. < mutation_rate < 1.:
             # Expecting that all gifts are in bags

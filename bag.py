@@ -7,7 +7,6 @@ class Bag:
     def __init__(self, is_trash_bag=False):
         self.gifts = []
         self.weight = 0.0
-        # self.expected_weight = 0.0
         self.is_trash_bag = is_trash_bag
 
     def add_gift(self, gift):
@@ -17,13 +16,6 @@ class Bag:
     def remove_gift(self, gift):
         self.gifts.remove(gift)
         self.weight -= gift.weight
-
-    # def calculate_weight(self):
-    #     self.weight = np.array([gift.weight for gift in self.gifts]).sum()
-    #     self.expected_weight = np.array(
-    #         [utils.SIMULATED_GIFTS[g.gift_type] for g in self.gifts]).sum(
-    #         axis=0).mean()
-    #     # print("Expected weight: %s" % self.expected_weight)
 
     def simulate_weight(self, n_observations=1000):
         bag_weights, bag_rejected = [], []
