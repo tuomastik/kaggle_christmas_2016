@@ -28,9 +28,6 @@ GIFT_WEIGHT_DISTRIBUTIONS = {
                        else np.random.rand(1)[0])}
 
 
-EXPECTED_GIFT_WEIGHTS = {}
-
-
 def simulate_gift_weights(n_observations_per_gift=1000):
     # Get unique gift types
     gift_types = GIFTS_DF['GiftId'].apply(lambda x: x.split('_')[0]).unique()
@@ -41,6 +38,10 @@ def simulate_gift_weights(n_observations_per_gift=1000):
             GIFT_WEIGHT_DISTRIBUTIONS[gift_type]() for _ in
             range(n_observations_per_gift)]
     return simulated_data
+
+
+SIMULATED_GIFTS = simulate_gift_weights(n_observations_per_gift=10000)
+EXPECTED_GIFT_WEIGHTS = {}
 
 
 def set_expected_gift_weights(approach, n_observations_per_gift=None):
