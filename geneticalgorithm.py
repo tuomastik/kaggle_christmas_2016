@@ -26,7 +26,8 @@ class GeneticAlgorithm:
                  gift_weight_init_method=GiftWeightInitMethod.expected_mean,
                  gift_type_amounts=None):
         self.results_folder_name = self.save_init_settings_on_hard_drive(
-            population_size, gift_weight_init_method, gift_type_amounts)
+            population_size, n_observations_to_evaluate_solution,
+            gift_weight_init_method, gift_type_amounts)
         self.calculate_expected_weights_if_needed(gift_weight_init_method)
         self.individuals = []
         for i in range(1, population_size + 1):
@@ -37,6 +38,7 @@ class GeneticAlgorithm:
                 n_observations_to_evaluate_solution))
         self.individuals = np.array(self.individuals)
         self.best_individual = None
+        self.find_best_individual()
 
     def train(self, n_generations=1000, for_reproduction=0.1,
               mutation_rate=0.01, selection_method=SelectionMethod.truncation):
@@ -97,23 +99,35 @@ class GeneticAlgorithm:
         rewards = np.array([i.reward for i in self.individuals])
         uniques, unique_ix = np.unique(rewards, return_index=True)
         if len(uniques) >= n_parents:
-            # Select unique best solutions if enough available
+            # Select unique best solutions if enough uniques available
             best_uniques_ix = np.argpartition(uniques, -n_parents)[-n_parents:]
             best_unique_rewards_ix = unique_ix[best_uniques_ix]
             parents = self.individuals[best_unique_rewards_ix]
         else:
-            # Find indices of solutions with best rewards
+            # Select non-unique best solutions
             best_ix = np.argpartition(rewards, -n_parents)[-n_parents:]
             parents = self.individuals[best_ix]
         return parents
 
+    def add_current_best_solution_if_needed(self, parents):
+        # If all new parents have lower reward than the reward of the
+        # best solution so far, replace the worst parent with
+        # by the best solution so far.
+        if (np.array([p.reward for p in parents]).max() <
+                self.best_individual.reward):
+            # Sort current parents by the reward (ascending order)
+            parents.sort(key=lambda x: x.reward, reverse=False)
+            parents[0] = self.best_individual
+        return parents
+
     def select_parents(self, selection_method, n_parents):
         if selection_method == SelectionMethod.truncation:
-            return self.parent_selection_truncation(n_parents)
+            parents = self.parent_selection_truncation(n_parents)
         elif selection_method == SelectionMethod.roulette_wheel:
-            return self.parent_selection_roulette_wheel(n_parents)
+            parents = self.parent_selection_roulette_wheel(n_parents)
         else:
             raise(Exception("Unknown selection_method"))
+        return self.add_current_best_solution_if_needed(parents)
 
     @staticmethod
     def breed_mutation(parents, children_per_parent, mutation_rate):
@@ -148,7 +162,8 @@ class GeneticAlgorithm:
 
     @staticmethod
     def save_init_settings_on_hard_drive(
-            population_size, gift_weight_init_method, gift_type_amounts):
+            population_size, n_observations_to_evaluate_solution,
+            gift_weight_init_method, gift_type_amounts):
         # Create parent folder if needed
         if not os.path.exists(SAVED_SOLUTIONS_FOLDER):
             os.makedirs(SAVED_SOLUTIONS_FOLDER)
@@ -161,11 +176,13 @@ class GeneticAlgorithm:
         settings = [
             "\nInitialization settings\n-----------------------",
             "Population size: %s" % population_size,
+            "Nr of observations to evaluate a solution with: %s" % (
+                n_observations_to_evaluate_solution),
             "Gift weight init method: %s" % gift_weight_init_method,
             "Gift type amounts to include: %s" % gift_type_amounts]
         # Create settings file, write to file & close the file
         f_out = open(os.path.join(results_folder, 'settings.txt'), 'w')
-        f_out.write('\n'.join(settings))
+        f_out.write('\n'.join(settings) + '\n')
         f_out.close()
         # Print the settings as well
         for s in settings:
@@ -186,7 +203,7 @@ class GeneticAlgorithm:
             "Max weight of a bag: %s" % utils.MAX_BAG_WEIGHT,
             "Minimum nr of gifts in a bag: %s" % utils.MIN_GIFTS_IN_BAG]
         f = open(os.path.join(self.results_folder_name, 'settings.txt'), "a")
-        f.write('\n'.join(settings))
+        f.write('\n'.join(settings) + '\n')
         f.close()
         # Print the settings as well
         for s in settings:

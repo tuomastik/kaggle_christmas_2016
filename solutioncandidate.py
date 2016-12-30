@@ -66,9 +66,6 @@ class SolutionCandidate:
             for gift in gifts:
                 trash_bag.add_gift(gift)
             bags.append(trash_bag)
-        # Calculate weights for all the bags
-        for bag in bags:
-            bag.calculate_weight()
         return bags
 
     def calculate_reward(self, n_observations_to_evaluate_solution):
@@ -93,6 +90,9 @@ class SolutionCandidate:
 
     # Old reward calculation
     # def calculate_reward(self):
+    #     # Calculate expected weights for all the bags
+    #         for bag in bags:
+    #             bag.calculate_weight()
     #     rewards = []
     #     for bag in self.bags:
     #         if (not bag.is_trash_bag and len(bag.gifts) >= 3 and
@@ -116,9 +116,7 @@ class SolutionCandidate:
         for bag_from, bag_to in zip(bag_ix_from, bag_ix_to):
             gift = np.random.choice(self.bags[bag_from].gifts, size=1)[0]
             self.bags[bag_to].add_gift(gift)
-            self.bags[bag_to].calculate_weight()
             self.bags[bag_from].remove_gift(gift)
-            self.bags[bag_from].calculate_weight()
 
     def get_mutation_bag_ix(self, n_gifts_mutate):
         bag_ix_from = np.random.choice(
