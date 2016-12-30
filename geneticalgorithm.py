@@ -116,7 +116,8 @@ class GeneticAlgorithm:
         if (np.array([p.reward for p in parents]).max() <
                 self.best_individual.reward):
             # Sort current parents by the reward (ascending order)
-            parents.sort(key=lambda x: x.reward, reverse=False)
+            parents = np.array(
+                sorted(list(parents), key=lambda x: x.reward, reverse=False))
             parents[0] = self.best_individual
         return parents
 
