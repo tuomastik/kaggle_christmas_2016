@@ -24,11 +24,12 @@ class Bag:
         else:
             bag_weights = utils.SIMULATED_GIFTS[
                 [gift.gift_type for gift in self.gifts]].sample(
-                n=n_observations, axis=0, replace=False).sum(axis=1)
+                n=n_observations, axis=0, replace=False).sum(axis=1).tolist()
             bag_rejected = []
-            for bag_weight in bag_weights:
+            for i, bag_weight in enumerate(bag_weights):
                 if len(self.gifts) >= 3 and bag_weight <= utils.MAX_BAG_WEIGHT:
                     bag_rejected.append(0)
                 else:
+                    bag_weights[i] = 0.0
                     bag_rejected.append(1)
-        return bag_weights.tolist(), bag_rejected
+        return bag_weights, bag_rejected
