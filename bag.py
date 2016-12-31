@@ -18,17 +18,17 @@ class Bag:
         self.weight -= gift.weight
 
     def simulate_weight(self, n_observations=1000):
-        bag_weights, bag_rejected = [], []
-        for _ in range(n_observations):
-            gift_weigths = np.array([
-                utils.GIFT_WEIGHT_DISTRIBUTIONS[gift.gift_type.lower()]()
-                for gift in self.gifts])
-            simulated_bag_weight = gift_weigths.sum()
-            if (not self.is_trash_bag and len(self.gifts) >= 3 and
-                    simulated_bag_weight <= utils.MAX_BAG_WEIGHT):
-                bag_weights.append(simulated_bag_weight)
-                bag_rejected.append(0)
-            elif not self.is_trash_bag:
-                bag_weights.append(0)
-                bag_rejected.append(1)
-        return bag_weights, bag_rejected
+        if self.is_trash_bag:
+            bag_rejected = np.ones(shape=(1, n_observations))
+            bag_weights = np.zeros(shape=(1, n_observations))
+        else:
+            bag_weights = utils.SIMULATED_GIFTS[
+                [gift.gift_type for gift in self.gifts]].sample(
+                n=n_observations, axis=0, replace=False).sum(axis=1)
+            bag_rejected = []
+            for bag_weight in bag_weights:
+                if len(self.gifts) >= 3 and bag_weight <= utils.MAX_BAG_WEIGHT:
+                    bag_rejected.append(0)
+                else:
+                    bag_rejected.append(1)
+        return bag_weights.tolist(), bag_rejected
