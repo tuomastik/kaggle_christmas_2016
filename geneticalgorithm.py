@@ -21,27 +21,36 @@ class SelectionMethod:
 
 class GeneticAlgorithm:
 
-    def __init__(self, population_size=50,
-                 n_observations_to_evaluate_solution=100,
+    def __init__(self, population_size=100,
+                 n_observations_to_evaluate_solution=1000,
                  gift_weight_init_method=GiftWeightInitMethod.expected_mean,
-                 gift_type_amounts=None):
+                 gift_type_amounts=None,
+                 warm_start_path=None):
         self.results_folder_name = self.save_init_settings_on_hard_drive(
             population_size, n_observations_to_evaluate_solution,
-            gift_weight_init_method, gift_type_amounts)
+            gift_weight_init_method, gift_type_amounts, warm_start_path)
         self.calculate_expected_weights_if_needed(gift_weight_init_method)
-        self.individuals = []
-        for i in range(1, population_size + 1):
-            print("\rInitializing population - solution candidate %s / %s" % (
-                  i, population_size), end='', flush=True)  # Print same line
-            self.individuals.append(SolutionCandidate(
-                gift_weight_init_method, gift_type_amounts,
-                n_observations_to_evaluate_solution))
-        self.individuals = np.array(self.individuals)
+        self.individuals = self.init_population(
+            population_size, n_observations_to_evaluate_solution,
+            gift_weight_init_method, gift_type_amounts, warm_start_path)
         self.best_individual = None
         self.find_best_individual()
 
+    @staticmethod
+    def init_population(population_size, n_observations_to_evaluate_solution,
+                        gift_weight_init_method, gift_type_amounts,
+                        warm_start_path):
+        individuals = []
+        for i in range(1, population_size + 1):
+            print("\rInitializing population - solution candidate %s / %s"
+                  % (i, population_size), end='', flush=True)
+            individuals.append(SolutionCandidate(
+                gift_weight_init_method, gift_type_amounts,
+                n_observations_to_evaluate_solution, warm_start_path))
+        return np.array(individuals)
+
     def train(self, n_generations=1000, for_reproduction=0.1,
-              mutation_rate=0.01, selection_method=SelectionMethod.truncation):
+              mutation_rate=1, selection_method=SelectionMethod.truncation):
         print("\nStarting training...")
 
         # Pre calculate things.
@@ -164,7 +173,7 @@ class GeneticAlgorithm:
     @staticmethod
     def save_init_settings_on_hard_drive(
             population_size, n_observations_to_evaluate_solution,
-            gift_weight_init_method, gift_type_amounts):
+            gift_weight_init_method, gift_type_amounts, warm_start_path):
         # Create parent folder if needed
         if not os.path.exists(SAVED_SOLUTIONS_FOLDER):
             os.makedirs(SAVED_SOLUTIONS_FOLDER)
@@ -180,7 +189,8 @@ class GeneticAlgorithm:
             "Nr of observations to evaluate a solution with: %s" % (
                 n_observations_to_evaluate_solution),
             "Gift weight init method: %s" % gift_weight_init_method,
-            "Gift type amounts to include: %s" % gift_type_amounts]
+            "Gift type amounts to include: %s" % gift_type_amounts,
+            "Warm start path (starting point solution): %s" % warm_start_path]
         # Create settings file, write to file & close the file
         f_out = open(os.path.join(results_folder, 'settings.txt'), 'w')
         f_out.write('\n'.join(settings) + '\n')

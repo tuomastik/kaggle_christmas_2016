@@ -12,9 +12,9 @@ from bag import Bag
 
 class SolutionCandidate:
     def __init__(self, gift_weight_init_method, gift_type_amounts,
-                 n_observations_to_evaluate_solution):
+                 n_observations_to_evaluate_solution, warm_start_path=None):
         self.bags = self.initialize_bags(
-            gift_weight_init_method, gift_type_amounts)
+            gift_weight_init_method, gift_type_amounts, warm_start_path)
         self.reward = 0.0
         self.reward_std = 0.0
         self.mean_reject_rate = 0.0
@@ -23,49 +23,63 @@ class SolutionCandidate:
         self.calculate_reward(n_observations_to_evaluate_solution)
 
     @staticmethod
-    def initialize_bags(gift_weight_init_method, gift_type_amounts):
-        gift_type_amounts_remaining = copy.deepcopy(gift_type_amounts)
-        bags, gifts = [], []
-        # Initialize bags
-        for _ in range(utils.N_BAGS):
-            bags.append(Bag(is_trash_bag=False))
-        # Initialize gifts
-        for _, row in utils.GIFTS_DF.iterrows():
-            gift = Gift(id_label=row['GiftId'],
-                        gift_type=row['GiftId'].split('_')[0].title())
-            if gift_type_amounts_remaining is not None:
-                gift_type_amounts_remaining[gift.gift_type] -= 1
-            if (gift_type_amounts_remaining is None or
-                    gift_type_amounts_remaining[gift.gift_type] >= 0):
-                # Add gift only if its type hasn't been added enough already
-                gift.initialize_weight(gift_weight_init_method)
-                gifts.append(gift)
-        # Randomize the order of gifts
-        np.random.shuffle(gifts)
-        # Put gifts in the bags
-        all_bags_full = False
-        while not all_bags_full:
-            n_bags_filled = 0
-            # For each bag, add the first occurring gift that fits in the bag
-            for bag in bags:
-                gift_to_add = None
+    def initialize_bags(gift_weight_init_method, gift_type_amounts,
+                        warm_start_path):
+        bags = []
+        if warm_start_path is None:
+            gift_type_amounts_remaining = copy.deepcopy(gift_type_amounts)
+            gifts = []
+            # Initialize bags
+            for _ in range(utils.N_BAGS):
+                bags.append(Bag(is_trash_bag=False))
+            # Initialize gifts
+            for _, row in utils.GIFTS_DF.iterrows():
+                gift = Gift(id_label=row['GiftId'],
+                            gift_type=row['GiftId'].split('_')[0].title())
+                if gift_type_amounts_remaining is not None:
+                    gift_type_amounts_remaining[gift.gift_type] -= 1
+                if (gift_type_amounts_remaining is None or
+                        gift_type_amounts_remaining[gift.gift_type] >= 0):
+                    # Add only if gift's type hasn't been added enough already
+                    gift.initialize_weight(gift_weight_init_method)
+                    gifts.append(gift)
+            # Randomize the order of gifts
+            np.random.shuffle(gifts)
+            # Put gifts in the bags
+            all_bags_full = False
+            while not all_bags_full:
+                n_bags_filled = 0
+                # For each bag, add first occurring gift that fits in the bag
+                for bag in bags:
+                    gift_to_add = None
+                    for gift in gifts:
+                        if bag.weight + gift.weight <= utils.MAX_BAG_WEIGHT:
+                            gift_to_add = gift
+                            bag.add_gift(gift_to_add)
+                            break
+                    if gift_to_add is not None:
+                        # Remove added gift from list of gifts
+                        gifts.remove(gift_to_add)
+                        n_bags_filled += 1
+                if n_bags_filled == 0:
+                    all_bags_full = True
+            if len(gifts) > 0:
+                # Add the remaining gifts to a trash bag
+                trash_bag = Bag(is_trash_bag=True)
                 for gift in gifts:
-                    if bag.weight + gift.weight <= utils.MAX_BAG_WEIGHT:
-                        gift_to_add = gift
-                        bag.add_gift(gift_to_add)
-                        break
-                if gift_to_add is not None:
-                    # Remove added gift from list of gifts
-                    gifts.remove(gift_to_add)
-                    n_bags_filled += 1
-            if n_bags_filled == 0:
-                all_bags_full = True
-        if len(gifts) > 0:
-            # Add the remaining gifts to a trash bag
-            trash_bag = Bag(is_trash_bag=True)
-            for gift in gifts:
-                trash_bag.add_gift(gift)
-            bags.append(trash_bag)
+                    trash_bag.add_gift(gift)
+                bags.append(trash_bag)
+        else:
+            with open(warm_start_path) as f:
+                f.readline()  # Throw away first line (header)
+                for l in f.readlines():
+                    bag = Bag(is_trash_bag=False)
+                    for gift_label in l.split(' '):
+                        gift = Gift(id_label=gift_label,
+                                    gift_type=gift_label.split('_')[0].title())
+                        gift.initialize_weight(gift_weight_init_method)
+                        bag.add_gift(gift)
+                    bags.append(bag)
         return bags
 
     def calculate_reward(self, n_observations_to_evaluate_solution):
