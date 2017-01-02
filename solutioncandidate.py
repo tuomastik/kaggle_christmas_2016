@@ -74,7 +74,7 @@ class SolutionCandidate:
                 f.readline()  # Throw away first line (header)
                 for l in f.readlines():
                     bag = Bag(is_trash_bag=False)
-                    for gift_label in l.split(' '):
+                    for gift_label in l.replace('\n', '').split(' '):
                         gift = Gift(id_label=gift_label,
                                     gift_type=gift_label.split('_')[0].title())
                         gift.initialize_weight(gift_weight_init_method)
