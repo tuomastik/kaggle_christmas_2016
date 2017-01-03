@@ -50,7 +50,8 @@ class GeneticAlgorithm:
         return np.array(individuals)
 
     def train(self, n_generations=1000, for_reproduction=0.1,
-              mutation_rate=1, selection_method=SelectionMethod.truncation):
+              mutation_rate=1, selection_method=SelectionMethod.truncation,
+              swap_proba=0.5):
         print("\nStarting training...")
 
         # Pre calculate things.
@@ -66,7 +67,7 @@ class GeneticAlgorithm:
         # Save settings
         self.save_train_settings_on_hard_drive(
             n_parents, children_per_parent, n_generations, mutation_rate,
-            selection_method)
+            selection_method, swap_proba)
 
         # Evolution
         for generation in range(1, n_generations + 1):
@@ -80,8 +81,7 @@ class GeneticAlgorithm:
                       (p.reward, p.reward_std, p.mean_reject_rate))
 
             self.individuals = self.breed_mutation(
-                parents=parents, children_per_parent=children_per_parent,
-                mutation_rate=mutation_rate)
+                parents, children_per_parent, mutation_rate, swap_proba)
             self.calculate_rewards()
 
             self.find_best_individual()
@@ -140,12 +140,13 @@ class GeneticAlgorithm:
         return self.add_current_best_solution_if_needed(parents)
 
     @staticmethod
-    def breed_mutation(parents, children_per_parent, mutation_rate):
+    def breed_mutation(parents, children_per_parent, mutation_rate,
+                       swap_proba):
         mutation_children = []
         for parent in parents:
                 for _ in range(children_per_parent):
                     new_child = copy.deepcopy(parent)
-                    new_child.mutate(mutation_rate)
+                    new_child.mutate(mutation_rate, swap_proba)
                     mutation_children.append(new_child)
         return np.array(mutation_children)
 
@@ -202,7 +203,7 @@ class GeneticAlgorithm:
 
     def save_train_settings_on_hard_drive(
             self, n_parents, children_per_parent, n_generations, mutation_rate,
-            selection_method):
+            selection_method, swap_proba):
         settings = [
             "\nTraining settings\n-----------------",
             "Nr of parents: %s" % n_parents,
@@ -210,6 +211,8 @@ class GeneticAlgorithm:
             "Nr of generations: %s" % n_generations,
             "Mutation rate: %s" % mutation_rate,
             "Selection method: %s" % selection_method,
+            "Probability of swapping gifts between bags in mutation: %s" % (
+                swap_proba),
             "Nr of bags: %s" % len(self.individuals[0].bags),
             "Max weight of a bag: %s" % utils.MAX_BAG_WEIGHT,
             "Minimum nr of gifts in a bag: %s" % utils.MIN_GIFTS_IN_BAG]

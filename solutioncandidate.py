@@ -102,31 +102,37 @@ class SolutionCandidate:
         self.mean_reject_rate = (
             bags_rejected.sum(axis=1) / len(bags_rejected.columns)).mean()
 
-    def mutate(self, mutation_rate=0.001):
+    def mutate(self, mutation_rate=0.001, swap_proba=0.4):
         if isinstance(mutation_rate, float) and 0. < mutation_rate < 1.:
             # Expecting that all gifts are in bags
             n_gifts_mutate = int(np.floor(mutation_rate * utils.N_GIFTS))
         else:
             n_gifts_mutate = int(mutation_rate)
         # Select the bags between which gifts are to be mutated (moved)
-        bag_ix_from, bag_ix_to = self.get_mutation_bag_ix(n_gifts_mutate)
+        bag_ix_from, bag_ix_to = self.get_mutation_bag_ix(n_gifts_mutate,
+                                                          swap_proba)
         # Move gifts between bags
         for bag_from, bag_to in zip(bag_ix_from, bag_ix_to):
-            gift = np.random.choice(self.bags[bag_from].gifts, size=1)[0]
+            gift = np.random.choice(self.bags[bag_from].gifts)
             self.bags[bag_to].add_gift(gift)
             self.bags[bag_from].remove_gift(gift)
 
-    def get_mutation_bag_ix(self, n_gifts_mutate):
+    def get_mutation_bag_ix(self, n_gifts_mutate, swap_proba):
         bag_ix_from = np.random.choice(
             # There must be gift(s) in a bag
             [i for i, bag in enumerate(self.bags) if len(bag.gifts) > 1],
-            size=n_gifts_mutate, replace=False)
+            size=n_gifts_mutate, replace=False).tolist()
         bag_ix_to = []
         for bag_ix in bag_ix_from:
             bag_ix_to.append(np.random.choice(
                 # Let's not add gifts to bags where they were taken from
-                [i for i in range(len(self.bags)) if i != bag_ix], size=1)[0])
-        return bag_ix_from, np.array(bag_ix_to)
+                [i for i in range(len(self.bags)) if i != bag_ix and
+                 i not in bag_ix_to]))
+        if np.random.uniform(low=0, high=1) < swap_proba:
+            # Swap between bags
+            bag_ix_from, bag_ix_to = (bag_ix_from + bag_ix_to,
+                                      bag_ix_to + bag_ix_from)
+        return np.array(bag_ix_from), np.array(bag_ix_to)
 
     def save_on_hard_drive(self, folder_name):
         date_time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
