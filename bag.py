@@ -22,9 +22,12 @@ class Bag:
             bag_rejected = np.ones(shape=(1, n_observations))
             bag_weights = np.zeros(shape=(1, n_observations))
         else:
-            bag_weights = utils.SIMULATED_GIFTS[
-                [gift.gift_type for gift in self.gifts]].sample(
-                n=n_observations, axis=0, replace=False).sum(axis=1).tolist()
+            # Simulate bag weight n_observations times
+            bag_weights = np.zeros(n_observations)
+            row_indices = np.random.permutation(utils.SIMULATED_GIFTS.shape[0])
+            for i, gift in enumerate(self.gifts):
+                bag_weights += utils.SIMULATED_GIFTS[gift.gift_type].iloc[
+                    row_indices[i*n_observations:(i+1)*n_observations]]
             bag_rejected = []
             for i, bag_weight in enumerate(bag_weights):
                 if len(self.gifts) >= 3 and bag_weight <= utils.MAX_BAG_WEIGHT:
@@ -32,4 +35,4 @@ class Bag:
                 else:
                     bag_weights[i] = 0.0
                     bag_rejected.append(1)
-        return bag_weights, bag_rejected
+        return bag_weights.tolist(), bag_rejected

@@ -40,7 +40,7 @@ def simulate_gift_weights(n_observations_per_gift=1000):
     return simulated_data
 
 
-SIMULATED_GIFTS = simulate_gift_weights(n_observations_per_gift=10000)
+SIMULATED_GIFTS = simulate_gift_weights(n_observations_per_gift=100000)
 EXPECTED_GIFT_WEIGHTS = {}
 
 
