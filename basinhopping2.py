@@ -31,7 +31,7 @@ def func(bag_gift_matrix):
     bag_gift_matrix = bag_gift_matrix.reshape(bag_gift_mat_shape)
     bag_weights = np.dot(bag_gift_matrix.transpose(), gift_type_weights)
     # limit bag weights to 50kg smoothly by using sigmoid function
-    bag_weights = [limiting_sigmoid(bw, steepness=1) for bw in bag_weights]
+    bag_weights = [bw*limiting_sigmoid(bw, steepness=1) for bw in bag_weights]
     bag_weights = np.array(bag_weights)
 
     print("Num gifts: {} - sum: {}".format(bag_gift_matrix.sum(), bag_weights.sum()))
