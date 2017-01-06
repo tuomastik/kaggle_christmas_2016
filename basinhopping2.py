@@ -1,5 +1,6 @@
 from scipy.optimize import basinhopping
 import numpy as np
+import pandas as pd
 
 import utils
 
@@ -89,14 +90,14 @@ def main():
     print("Weight per bag: {:.4f}".format(-bh.fun / num_bags_to_minimize))
     print(bh.x)
     mat = bh.x.reshape(matrix_shape)
-    gift_counts = mat.astype(int).sum(axis=1)
-    print("Bag gift counts \n{}".format(gift_counts.transpose()))
+    gift_counts = pd.DataFrame(mat.astype(int).sum(axis=1),
+                               index=gifts_type_counts.index)
+    print("Bag gift counts \n{}".format(gift_counts))
     print("Total gift counts \n{}".format(gifts_type_counts))
 
-    # TODO: iteratively decrement total gift count
     # TODO: try different minimizers
-    # TODO: Tee palautus
-    # TODO: gift counts ad pandas dataframe
+    # TODO: Iteratively optimize all bags
+    # TODO: Make submission
 
 
 if __name__ == '__main__':
