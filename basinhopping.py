@@ -13,8 +13,7 @@ for gift_type, gift_count in gifts_type_counts.to_dict().items():
     gift_types += [gift_type] * gift_count
 
 # Bag of each gift
-gift_bags_initial = [np.random.choice(utils.N_BAGS) for _ in
-                     range(len(gift_types))]
+gift_bags_initial = np.random.choice(utils.N_BAGS, size=len(gift_types))
 
 
 def function_to_minimize(gift_bags):
