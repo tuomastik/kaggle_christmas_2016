@@ -134,6 +134,32 @@ class SolutionCandidate:
                                       bag_ix_to + bag_ix_from)
         return np.array(bag_ix_from), np.array(bag_ix_to)
 
+    def print_expected_weights(self):
+        print('')
+        for i, bag in enumerate(self.bags, start=1):
+            print("Bag %4s expected weight: %.2f" % (
+                i, np.array(bag.simulate_weight()[0]).mean()))
+
+    def get_gift_type_counts(self):
+        gift_type_counts = {}
+        for bag in self.bags:
+            for gift in bag.gifts:
+                gift_type_counts[gift.gift_type] = \
+                    gift_type_counts.get(gift.gift_type, 0) + 1
+        return gift_type_counts
+
+    def shuffle_gift_ids(self):
+        gift_type_counts = self.get_gift_type_counts()
+        for k, v in gift_type_counts.items():
+            gift_type_counts[k] = np.random.permutation(v).tolist()
+        for i, bag in enumerate(self.bags):
+            for j, gift in enumerate(bag.gifts):
+                new_random_id = np.random.choice(
+                    gift_type_counts[gift.gift_type])
+                self.bags[i].gifts[j].id_label = '_'.join((
+                    gift.gift_type.lower(), str(new_random_id)))
+                gift_type_counts[gift.gift_type].remove(new_random_id)
+
     def save_on_hard_drive(self, folder_name):
         date_time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         # Save object

@@ -10,8 +10,8 @@ if __name__ == '__main__':
         gift_weight_init_method=(
             geneticalgorithm.GiftWeightInitMethod.sample_from_distr),
         warm_start_path=os.path.join(
-            'ga_solutions', '2017-01-01_18-01-18',
-            '2017-01-02_19-37-54--reward=32275.3248013--submission.csv'),
+            'ga_solutions', '2017-01-04_23-10-59',
+            '2017-01-08_20-09-36--reward=40069.5202584--submission.csv'),
         gift_type_amounts={
             'Horse': 1000,    # Max 1000
             'Ball': 1100,     # Max 1100
@@ -23,6 +23,13 @@ if __name__ == '__main__':
             'Blocks': 1000,   # Max 1000
             'Gloves': 200})   # Max 200
 
-    ga.train(n_generations=10000, for_reproduction=0.04, mutation_rate=2,
+    # Debugging
+    # ga.individuals[0].print_expected_weights()
+    # ga.individuals[0].get_gift_type_counts()
+    # ga.individuals[0].shuffle_gift_ids()
+    # ga.individuals[0].print_expected_weights()
+    # ga.individuals[0].save_on_hard_drive(ga.results_folder_name)
+
+    ga.train(n_generations=10000, for_reproduction=0.2, mutation_rate=1,
              selection_method=geneticalgorithm.SelectionMethod.truncation,
              swap_proba=0.5)
