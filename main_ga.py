@@ -26,7 +26,7 @@ if __name__ == '__main__':
     # Debugging
     # ga.individuals[0].print_expected_weights()
     # ga.individuals[0].get_gift_type_counts()
-    # ga.individuals[0].shuffle_gift_ids()
+    # ga.individuals[0].shuffle_gift_ids(gift_type_to_shuffle='bike')
     # ga.individuals[0].print_expected_weights()
     # ga.individuals[0].save_on_hard_drive(ga.results_folder_name)
 
