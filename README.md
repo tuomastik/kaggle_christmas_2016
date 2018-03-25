@@ -1,5 +1,7 @@
 # Kaggle Christmas 2016: Santa's Uncertain Bags
 
+Evolutionary algorithm to solve a stochastic multiple knapsack optimization problem.
+
 ## Task description
 * Fill Santa's bags as full as possible
     * [https://www.kaggle.com/c/santas-uncertain-bags](https://www.kaggle.com/c/santas-uncertain-bags)

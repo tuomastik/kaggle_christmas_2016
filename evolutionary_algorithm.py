@@ -5,11 +5,11 @@ from datetime import datetime
 import numpy as np
 
 import utils
-from solutioncandidate import SolutionCandidate
+from solution_candidate import SolutionCandidate
 from gift import GiftWeightInitMethod
 
 
-SAVED_SOLUTIONS_FOLDER = 'ga_solutions'
+SAVED_SOLUTIONS_FOLDER = 'ea_solutions'
 
 
 class SelectionMethod:
@@ -19,7 +19,7 @@ class SelectionMethod:
     roulette_wheel = 'roulette_wheel'
 
 
-class GeneticAlgorithm:
+class EvolutionaryAlgorithm:
 
     def __init__(self, population_size=100,
                  n_observations_to_evaluate_solution=1000,
