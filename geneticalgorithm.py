@@ -26,6 +26,7 @@ class GeneticAlgorithm:
                  gift_weight_init_method=GiftWeightInitMethod.expected_mean,
                  gift_type_amounts=None,
                  warm_start_path=None):
+        utils.set_simulated_gifts(n_observations_to_evaluate_solution)
         self.results_folder_name = self.save_init_settings_on_hard_drive(
             population_size, n_observations_to_evaluate_solution,
             gift_weight_init_method, gift_type_amounts, warm_start_path)

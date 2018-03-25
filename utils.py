@@ -40,7 +40,7 @@ def simulate_gift_weights(n_observations_per_gift=1000):
     return simulated_data
 
 
-SIMULATED_GIFTS = simulate_gift_weights(n_observations_per_gift=100000)
+SIMULATED_GIFTS = pd.DataFrame()
 EXPECTED_GIFT_WEIGHTS = {}
 
 
@@ -77,6 +77,11 @@ def set_expected_gift_weights(approach, n_observations_per_gift=None):
             'Gloves': 0.5 * 0.7 + 0.3 * 3.5}  # = 1.4
     else:
         raise(Exception("Unknown 'approach' parameter value: %s" % approach))
+
+
+def set_simulated_gifts(n_observations_per_gift):
+    global SIMULATED_GIFTS
+    SIMULATED_GIFTS = simulate_gift_weights(n_observations_per_gift)
 
 
 def round_down_to_even(f):
